@@ -23,8 +23,28 @@ import { mapOrderToViewModel, OrderViewModel } from '../../core/models/api.model
     <h2 class="mb-4 text-2xl font-bold">Mission Control: Orders</h2>
     <div *ngFor="let o of orders" class="mb-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="font-semibold">Order #{{ o.id }}</h3>
-        <span class="rounded-full border border-cyan-700 bg-cyan-950/60 px-3 py-1 text-xs font-medium text-cyan-300">{{ o.status }}</span>
+        <div class="flex items-center gap-3">
+          <h3 class="font-semibold">Order #{{ o.id }}</h3>
+          <span
+            class="rounded-full border px-3 py-1 text-xs font-medium"
+            [class.border-cyan-700]="o.status !== 'Delivered' && o.status !== 'Cancelled'"
+            [class.bg-cyan-950/60]="o.status !== 'Delivered' && o.status !== 'Cancelled'"
+            [class.text-cyan-300]="o.status !== 'Delivered' && o.status !== 'Cancelled'"
+            [class.border-emerald-700]="o.status === 'Delivered'"
+            [class.bg-emerald-950/60]="o.status === 'Delivered'"
+            [class.text-emerald-300]="o.status === 'Delivered'"
+            [class.border-rose-700]="o.status === 'Cancelled'"
+            [class.bg-rose-950/60]="o.status === 'Cancelled'"
+            [class.text-rose-300]="o.status === 'Cancelled'"
+          >{{ o.status }}</span>
+        </div>
+        <button
+          *ngIf="canCancel(o)"
+          class="rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-400"
+          (click)="cancelOrder(o.id)"
+        >
+          Cancel Order
+        </button>
       </div>
       <p class="mt-1 text-sm text-slate-300">Total amount: <span class="font-semibold text-emerald-400">₹ {{ o.totalAmount }}</span></p>
       <div class="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-slate-300">
@@ -71,6 +91,42 @@ export class OrdersPageComponent implements OnInit {
 
   isLoggedIn(): boolean {
     return this.getCurrentUserId() !== null;
+  }
+
+  canCancel(order: OrderViewModel): boolean {
+    return order.status !== 'Delivered' && order.status !== 'Cancelled';
+  }
+
+  cancelOrder(orderId: number): void {
+    this.loading = true;
+    this.orderService.cancel(orderId).subscribe({
+      next: () => {
+        const userId = this.getCurrentUserId();
+        if (!userId) {
+          this.loading = false;
+          return;
+        }
+
+        this.orderService.getByUser(userId).subscribe({
+          next: (orders) => {
+            this.orders = orders.map(mapOrderToViewModel);
+            this.loading = false;
+            this.message = 'Order cancelled successfully.';
+            this.hasError = false;
+          },
+          error: (err) => {
+            this.loading = false;
+            this.message = err?.error?.message ?? 'Unable to refresh orders.';
+            this.hasError = true;
+          }
+        });
+      },
+      error: (err) => {
+        this.loading = false;
+        this.message = err?.error?.message ?? 'Unable to cancel order.';
+        this.hasError = true;
+      }
+    });
   }
 
   private getCurrentUserId(): number | null {

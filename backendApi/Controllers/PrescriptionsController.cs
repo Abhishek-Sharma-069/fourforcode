@@ -42,4 +42,43 @@ public class PrescriptionsController(IPrescriptionService prescriptionService) :
         var reviewed = await prescriptionService.ReviewAsync(id, request);
         return reviewed is null ? NotFound() : Ok(reviewed);
     }
+
+    [HttpPost("upload-image")]
+    [Consumes("multipart/form-data")]
+    // Accepts an image file upload and creates prescription record.
+    public async Task<IActionResult> UploadImage(IFormFile file)
+    {
+        var userId = this.GetAuthenticatedUserId();
+        if (!userId.HasValue) return Unauthorized();
+
+        if (file is null || file.Length == 0)
+            return BadRequest(new { message = "No file uploaded." });
+
+        var allowedTypes = new[] { "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf" };
+        if (!allowedTypes.Contains(file.ContentType.ToLowerInvariant()))
+            return BadRequest(new { message = "Only JPEG, PNG, WebP, GIF images and PDF files are allowed." });
+
+        if (file.Length > 10 * 1024 * 1024)
+            return BadRequest(new { message = "File size must be under 10 MB." });
+
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "Uploads");
+        if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+
+        var ext = Path.GetExtension(file.FileName);
+        var fileName = $"rx_{userId.Value}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}{ext}";
+        var filePath = Path.Combine(uploadsDir, fileName);
+
+        await using var stream = new FileStream(filePath, FileMode.Create);
+        await file.CopyToAsync(stream);
+
+        var fileUrl = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
+
+        var prescription = await prescriptionService.UploadAsync(new UploadPrescriptionRequest
+        {
+            UserId = userId.Value,
+            FileUrl = fileUrl
+        });
+
+        return Ok(prescription);
+    }
 }

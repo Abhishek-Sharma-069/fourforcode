@@ -23,5 +23,6 @@ public enum OrderStatus
     Packed = 2,
     Shipped = 3,
     OutForDelivery = 4,
-    Delivered = 5
+    Delivered = 5,
+    Cancelled = 6
 }

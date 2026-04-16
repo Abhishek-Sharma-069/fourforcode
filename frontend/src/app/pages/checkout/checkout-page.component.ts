@@ -7,14 +7,15 @@ import { CartService } from '../../core/services/cart.service';
 import { OrderService } from '../../core/services/order.service';
 import { PrescriptionService } from '../../core/services/prescription.service';
 import { ProductService } from '../../core/services/product.service';
-import { CartItemDto, mapPrescriptionToViewModel, PrescriptionViewModel, ProductDto } from '../../core/models/api.models';
+import { CartItemDto, mapPrescriptionToViewModel, PrescriptionDto, PrescriptionViewModel, ProductDto } from '../../core/models/api.models';
+import { PrescriptionUploadComponent } from './prescription-upload.component';
 
 type CheckoutCartItem = { product: ProductDto; quantity: number; lineTotal: number };
 
 @Component({
   selector: 'app-checkout-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PrescriptionUploadComponent],
   template: `
     <div class="grid gap-4 lg:grid-cols-3">
       <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5 lg:col-span-2">
@@ -64,31 +65,24 @@ type CheckoutCartItem = { product: ProductDto; quantity: number; lineTotal: numb
 
             <div *ngIf="requiresPrescription" class="rounded-xl border border-amber-700 bg-amber-950/20 p-4">
               <h3 class="text-lg font-semibold text-amber-200">Prescription Needed</h3>
-              <p class="mt-1 text-sm text-amber-100/90">Your cart contains at least one medicine that requires an approved prescription.</p>
+              <p class="mt-1 text-sm text-amber-100/90">Your cart contains at least one medicine that requires a prescription.</p>
 
-              <label class="mt-4 block text-xs uppercase tracking-wide text-slate-400">Approved prescription</label>
-              <select class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2" [(ngModel)]="selectedPrescriptionId">
-                <option value="">Select approved prescription</option>
-                <option *ngFor="let prescription of approvedPrescriptions" [value]="prescription.id">
-                  #{{ prescription.id }} • {{ prescription.status }} • {{ prescription.fileUrl }}
-                </option>
-              </select>
+              <!-- Select an uploaded prescription -->
+              <div *ngIf="approvedPrescriptions.length > 0" class="mt-4">
+                <label class="block text-xs uppercase tracking-wide text-slate-400">Use an uploaded prescription</label>
+                <select class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2" [(ngModel)]="selectedPrescriptionId">
+                  <option value="">Select a prescription</option>
+                  <option *ngFor="let prescription of approvedPrescriptions" [value]="prescription.id">
+                    #{{ prescription.id }} • {{ prescription.status }} • Uploaded: {{ prescription.fileUrl | slice:0:60 }}...
+                  </option>
+                </select>
+              </div>
 
+              <!-- Upload new prescription image -->
               <div class="mt-4 border-t border-amber-800/40 pt-4">
-                <label class="block text-xs uppercase tracking-wide text-slate-400">Upload prescription URL</label>
-                <input
-                  class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 p-2"
-                  placeholder="Paste image or file URL"
-                  [(ngModel)]="newPrescriptionUrl"
-                />
-                <button
-                  class="mt-3 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                  [disabled]="uploadingPrescription || !newPrescriptionUrl.trim()"
-                  (click)="uploadPrescription()"
-                >
-                  {{ uploadingPrescription ? 'Uploading...' : 'Upload Prescription' }}
-                </button>
-                <p class="mt-2 text-xs text-slate-400">After upload, an admin must approve it before the order can be placed.</p>
+                <label class="mb-2 block text-xs uppercase tracking-wide text-slate-400">Or upload a new prescription</label>
+                <app-prescription-upload (uploaded)="onPrescriptionUploaded($event)"></app-prescription-upload>
+                <p class="mt-2 text-xs text-slate-400">After upload, it will be selected automatically so you can continue checkout.</p>
               </div>
             </div>
 
@@ -117,7 +111,7 @@ type CheckoutCartItem = { product: ProductDto; quantity: number; lineTotal: numb
           <p>Prescription items: <span class="font-semibold">{{ prescriptionItemCount }}</span></p>
           <p>Prescription status:
             <span class="font-semibold" [class.text-amber-300]="requiresPrescription && !selectedPrescriptionId" [class.text-emerald-400]="!requiresPrescription || !!selectedPrescriptionId">
-              {{ requiresPrescription ? (selectedPrescriptionId ? 'Ready' : 'Pending selection') : 'Not required' }}
+              {{ requiresPrescription ? (selectedPrescriptionId ? 'Attached' : 'Pending selection') : 'Not required' }}
             </span>
           </p>
           <p>Total amount: <span class="font-semibold text-emerald-400">₹ {{ totalAmount }}</span></p>
@@ -163,7 +157,7 @@ export class CheckoutPageComponent implements OnInit {
 
     const prescriptionId = this.selectedPrescriptionId ? Number(this.selectedPrescriptionId) : undefined;
     if (this.requiresPrescriptionForItems(itemsToCheckout) && !prescriptionId) {
-      this.setMessage('Select an approved prescription before placing this order.', true);
+      this.setMessage('Select or upload a prescription before placing this order.', true);
       return;
     }
 
@@ -208,6 +202,16 @@ export class CheckoutPageComponent implements OnInit {
         this.setMessage(err?.error?.message ?? 'Failed to upload prescription.', true);
       }
     });
+  }
+
+  onPrescriptionUploaded(prescription: PrescriptionDto): void {
+    const uploadedPrescription = mapPrescriptionToViewModel(prescription);
+    this.approvedPrescriptions = [
+      uploadedPrescription,
+      ...this.approvedPrescriptions.filter((item) => item.id !== uploadedPrescription.id)
+    ];
+    this.selectedPrescriptionId = String(prescription.id);
+    this.setMessage('Prescription uploaded successfully. Checkout is now enabled.', false);
   }
 
   get requiresPrescription(): boolean {
@@ -262,7 +266,7 @@ export class CheckoutPageComponent implements OnInit {
 
         this.approvedPrescriptions = prescriptions
           .map(mapPrescriptionToViewModel)
-          .filter((prescription) => prescription.status === 'Approved');
+          .filter((prescription) => prescription.status !== 'Rejected');
 
         if (this.selectedPrescriptionId && !this.approvedPrescriptions.some((item) => item.id === Number(this.selectedPrescriptionId))) {
           this.selectedPrescriptionId = '';

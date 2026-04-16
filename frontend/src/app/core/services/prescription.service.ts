@@ -12,6 +12,12 @@ export class PrescriptionService {
     return this.http.post<PrescriptionDto>(`${this.baseUrl}/upload`, { userId, fileUrl }, { withCredentials: true });
   }
 
+  uploadImage(file: File) {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post<PrescriptionDto>(`${this.baseUrl}/upload-image`, formData, { withCredentials: true });
+  }
+
   getByUser(userId: number) {
     return this.http.get<PrescriptionDto[]>(`${this.baseUrl}/${userId}`, { withCredentials: true });
   }

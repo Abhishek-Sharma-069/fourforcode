@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OrderService } from '../../core/services/order.service';
-import { PrescriptionService } from '../../core/services/prescription.service';
 import { ProductService } from '../../core/services/product.service';
 import {
   AdminService,
@@ -13,10 +12,8 @@ import {
 } from '../../core/services/admin.service';
 import {
   mapOrderToViewModel,
-  mapPrescriptionToViewModel,
   OrderStatusLabel,
   OrderViewModel,
-  PrescriptionViewModel,
   ProductDto
 } from '../../core/models/api.models';
 
@@ -36,10 +33,10 @@ import {
     <div *ngIf="isAdmin()" class="space-y-6">
 
       <!-- Header -->
-      <section class="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/30 p-6">
+      <section class="rounded-2xl border border-slate-800 bg-linear-to-r from-slate-900 via-slate-900 to-cyan-950/30 p-6">
         <p class="text-xs font-medium uppercase tracking-[0.2em] text-cyan-400">Control Panel</p>
         <h2 class="mt-1 text-3xl font-bold">Admin Dashboard</h2>
-        <p class="mt-2 text-sm text-slate-400">Manage inventory, review prescriptions, process orders, and administer users.</p>
+        <p class="mt-2 text-sm text-slate-400">Manage inventory, process orders, and administer users.</p>
       </section>
 
       <!-- Tab Navigation -->
@@ -197,8 +194,9 @@ import {
                 <div class="flex items-center gap-2">
                   <h4 class="font-semibold">Order #{{ o.id }}</h4>
                   <span class="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    [class.bg-cyan-900/50]="o.status !== 'Delivered'" [class.text-cyan-300]="o.status !== 'Delivered'"
-                    [class.bg-emerald-900/50]="o.status === 'Delivered'" [class.text-emerald-300]="o.status === 'Delivered'">
+                    [class.bg-cyan-900/50]="o.status !== 'Delivered' && o.status !== 'Cancelled'" [class.text-cyan-300]="o.status !== 'Delivered' && o.status !== 'Cancelled'"
+                    [class.bg-emerald-900/50]="o.status === 'Delivered'" [class.text-emerald-300]="o.status === 'Delivered'"
+                    [class.bg-rose-900/50]="o.status === 'Cancelled'" [class.text-rose-300]="o.status === 'Cancelled'">
                     {{ o.status }}
                   </span>
                 </div>
@@ -214,8 +212,16 @@ import {
                   class="rounded border px-2 py-1 text-xs font-medium transition"
                   [class.border-cyan-600]="true" [class.text-cyan-300]="true"
                   [class.hover:bg-cyan-900/40]="true"
+                  [disabled]="o.status === 'Delivered' || o.status === 'Cancelled'"
                   (click)="updateOrderStatus(o.id, s)">
                   → {{ s }}
+                </button>
+                <button
+                  class="rounded border border-rose-600 px-2 py-1 text-xs font-medium text-rose-300 transition hover:bg-rose-900/40"
+                  [disabled]="o.status === 'Delivered' || o.status === 'Cancelled'"
+                  (click)="cancelOrder(o.id)"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
@@ -227,6 +233,23 @@ import {
                 <span>{{ item.productName }} × {{ item.quantity }}</span>
                 <span class="text-slate-400">₹{{ item.price * item.quantity }}</span>
               </div>
+            </div>
+
+            <div *ngIf="o.prescriptionFileUrl" class="mt-3 rounded-lg border border-amber-800/40 bg-amber-950/10 p-3">
+              <p class="mb-2 text-xs uppercase tracking-wide text-amber-300">Prescription</p>
+              <p class="text-sm text-slate-300">
+                Status:
+                <span class="font-medium text-amber-200">{{ o.prescriptionStatus || 'Pending' }}</span>
+              </p>
+              <a [href]="o.prescriptionFileUrl" target="_blank" class="mt-2 inline-block text-xs text-cyan-400 underline hover:text-cyan-300">
+                Open uploaded file
+              </a>
+              <img
+                *ngIf="isImageFile(o.prescriptionFileUrl)"
+                [src]="o.prescriptionFileUrl"
+                alt="Prescription preview"
+                class="mt-3 max-h-64 rounded-lg border border-slate-800 object-contain"
+              />
             </div>
 
             <!-- Status timeline -->
@@ -299,49 +322,6 @@ import {
         </section>
       </div>
 
-      <!-- ═══════════════════════════════════════════════════════ -->
-      <!-- TAB: PRESCRIPTIONS                                     -->
-      <!-- ═══════════════════════════════════════════════════════ -->
-      <div *ngIf="activeTab === 'prescriptions'" class="space-y-4">
-        <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <h3 class="mb-3 text-lg font-semibold">📄 Prescription Review Queue</h3>
-          <div class="flex gap-3">
-            <input class="w-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none focus:border-cyan-500"
-              placeholder="User ID" [(ngModel)]="prescriptionUserId" />
-            <button class="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-              (click)="loadPrescriptions()">Load Prescriptions</button>
-          </div>
-
-          <div class="mt-4 space-y-3">
-            <div *ngFor="let p of prescriptions" class="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p class="text-sm font-medium">Prescription #{{ p.id }}</p>
-                  <p class="mt-0.5 text-sm text-slate-400">User: {{ p.userId }} • Status:
-                    <span class="font-medium"
-                      [class.text-amber-300]="p.status === 'Pending'"
-                      [class.text-emerald-400]="p.status === 'Approved'"
-                      [class.text-rose-400]="p.status === 'Rejected'">
-                      {{ p.status }}
-                    </span>
-                  </p>
-                  <a [href]="p.fileUrl" target="_blank" class="mt-1 inline-block text-xs text-cyan-400 underline hover:text-cyan-300">View File</a>
-                </div>
-                <div class="flex gap-2">
-                  <button class="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-                    (click)="reviewPrescription(p.id, 'Approved')">✓ Approve</button>
-                  <button class="rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-400"
-                    (click)="reviewPrescription(p.id, 'Rejected')">✗ Reject</button>
-                </div>
-              </div>
-            </div>
-            <p *ngIf="prescriptions.length === 0" class="rounded-xl border border-slate-800 bg-slate-950 p-6 text-center text-sm text-slate-400">
-              No prescriptions loaded. Enter a user ID above and click Load.
-            </p>
-          </div>
-        </section>
-      </div>
-
     </div>
   `
 })
@@ -350,8 +330,7 @@ export class AdminPageComponent implements OnInit {
   tabs = [
     { key: 'inventory', label: 'Inventory & Products', icon: '📦' },
     { key: 'orders', label: 'All Orders', icon: '📋' },
-    { key: 'users', label: 'User Management', icon: '👥' },
-    { key: 'prescriptions', label: 'Prescriptions', icon: '📄' }
+    { key: 'users', label: 'User Management', icon: '👥' }
   ];
   activeTab = 'inventory';
 
@@ -372,20 +351,15 @@ export class AdminPageComponent implements OnInit {
   // Orders tab
   allOrders: AdminOrderDto[] = [];
   ordersLoading = false;
-  orderStatuses: Exclude<OrderStatusLabel, 'Placed'>[] = ['Confirmed', 'Packed', 'Shipped', 'OutForDelivery', 'Delivered'];
+  orderStatuses: Array<Extract<OrderStatusLabel, 'Confirmed' | 'Packed' | 'Shipped' | 'OutForDelivery' | 'Delivered'>> = ['Confirmed', 'Packed', 'Shipped', 'OutForDelivery', 'Delivered'];
 
   // Users tab
   users: AdminUserDto[] = [];
   usersLoading = false;
 
-  // Prescriptions tab
-  prescriptionUserId = '';
-  prescriptions: PrescriptionViewModel[] = [];
-
   constructor(
     private readonly adminService: AdminService,
     private readonly productService: ProductService,
-    private readonly prescriptionService: PrescriptionService,
     private readonly orderService: OrderService
   ) {}
 
@@ -504,6 +478,18 @@ export class AdminPageComponent implements OnInit {
     });
   }
 
+  cancelOrder(orderId: number): void {
+    this.orderService.cancel(orderId).subscribe({
+      next: () => { this.showToast(`Order #${orderId} cancelled.`); this.loadAllOrders(); },
+      error: (err) => this.showToast(err?.error?.message ?? 'Failed to cancel order.', true)
+    });
+  }
+
+  isImageFile(url: string | null | undefined): boolean {
+    if (!url) return false;
+    return /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url);
+  }
+
   // ─── USERS ────────────────────────────────────────────────────
 
   loadUsers(): void {
@@ -535,21 +521,4 @@ export class AdminPageComponent implements OnInit {
     });
   }
 
-  // ─── PRESCRIPTIONS ───────────────────────────────────────────
-
-  loadPrescriptions(): void {
-    const userId = Number(this.prescriptionUserId);
-    if (!userId) return;
-    this.prescriptionService.getByUser(userId).subscribe({
-      next: (data) => { this.prescriptions = data.map(mapPrescriptionToViewModel); this.showToast('Prescriptions loaded.'); },
-      error: (err) => this.showToast(err?.error?.message ?? 'Failed to load prescriptions.', true)
-    });
-  }
-
-  reviewPrescription(id: number, status: 'Approved' | 'Rejected'): void {
-    this.prescriptionService.review(id, status).subscribe({
-      next: () => { this.showToast(`Prescription #${id} ${status.toLowerCase()}.`); this.loadPrescriptions(); },
-      error: (err) => this.showToast(err?.error?.message ?? 'Failed to review prescription.', true)
-    });
-  }
 }

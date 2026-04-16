@@ -57,6 +57,8 @@ public record AdminOrderDto(
     string UserName,
     string UserEmail,
     int? PrescriptionId,
+    string? PrescriptionFileUrl,
+    string? PrescriptionStatus,
     decimal TotalAmount,
     string Status,
     DateTime CreatedAt,

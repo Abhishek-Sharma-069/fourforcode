@@ -51,4 +51,14 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         var order = await orderService.UpdateStatusAsync(id, request);
         return order is null ? NotFound() : Ok(order);
     }
+
+    [HttpPut("{id:int}/cancel")]
+    // Cancels an order by user or admin.
+    public async Task<IActionResult> Cancel(int id)
+    {
+        var userId = this.GetAuthenticatedUserId();
+        if (!userId.HasValue) return Unauthorized();
+        var order = await orderService.CancelAsync(id, userId.Value, this.IsAdmin());
+        return order is null ? NotFound() : Ok(order);
+    }
 }

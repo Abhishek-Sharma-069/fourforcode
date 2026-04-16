@@ -28,6 +28,7 @@ export interface CartItemDto {
   quantity: number;
   productName: string;
   category: string;
+  requiresPrescription: boolean;
 }
 
 export interface CartDto {
@@ -51,7 +52,7 @@ export interface PrescriptionViewModel extends Omit<PrescriptionDto, 'status'> {
   status: PrescriptionStatusLabel;
 }
 
-export const ORDER_STATUS_LABELS = ['Placed', 'Confirmed', 'Packed', 'Shipped', 'OutForDelivery', 'Delivered'] as const;
+export const ORDER_STATUS_LABELS = ['Placed', 'Confirmed', 'Packed', 'Shipped', 'OutForDelivery', 'Delivered', 'Cancelled'] as const;
 export type OrderStatusLabel = (typeof ORDER_STATUS_LABELS)[number];
 
 export interface OrderItemDto {

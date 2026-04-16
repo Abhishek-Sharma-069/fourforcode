@@ -184,6 +184,7 @@ public class AdminController(ApplicationDbContext dbContext) : ControllerBase
     {
         var orders = await dbContext.Orders
             .Include(o => o.User)
+            .Include(o => o.Prescription)
             .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
             .Include(o => o.StatusHistory)
             .AsNoTracking()
@@ -196,6 +197,8 @@ public class AdminController(ApplicationDbContext dbContext) : ControllerBase
             o.User?.Name ?? "Unknown",
             o.User?.Email ?? "Unknown",
             o.PrescriptionId,
+            o.Prescription?.FileUrl,
+            o.Prescription?.Status.ToString(),
             o.TotalAmount,
             o.Status.ToString(),
             o.CreatedAt,

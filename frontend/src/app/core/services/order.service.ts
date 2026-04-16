@@ -19,4 +19,8 @@ export class OrderService {
   updateStatus(orderId: number, status: Exclude<OrderStatusLabel, 'Placed'>) {
     return this.http.put<OrderDto>(`${this.baseUrl}/${orderId}/status`, { status: toOrderStatusValue(status) }, { withCredentials: true });
   }
+
+  cancel(orderId: number) {
+    return this.http.put<OrderDto>(`${this.baseUrl}/${orderId}/cancel`, {}, { withCredentials: true });
+  }
 }

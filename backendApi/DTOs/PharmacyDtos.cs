@@ -8,7 +8,7 @@ public record ProductDto(int Id, string Name, int CategoryId, decimal Price, str
 // One item inside cart JSON.
 public record CartItemDto(int ProductId, int Quantity);
 // Enriched cart item returned by API.
-public record CartItemResponseDto(int ProductId, int Quantity, string ProductName, string Category);
+public record CartItemResponseDto(int ProductId, int Quantity, string ProductName, string Category, bool RequiresPrescription);
 // Cart response shape.
 public record CartDto(int UserId, List<CartItemResponseDto> Items);
 // One item inside order response.

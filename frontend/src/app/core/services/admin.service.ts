@@ -37,6 +37,8 @@ export interface AdminOrderDto {
   userName: string;
   userEmail: string;
   prescriptionId?: number;
+  prescriptionFileUrl?: string | null;
+  prescriptionStatus?: string | null;
   totalAmount: number;
   status: string;
   createdAt: string;

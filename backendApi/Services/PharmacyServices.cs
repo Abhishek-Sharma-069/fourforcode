@@ -38,6 +38,7 @@ public interface IOrderService
     Task<OrderDto?> GetByIdAsync(int id);
     Task<List<OrderDto>> GetByUserAsync(int userId);
     Task<OrderDto?> UpdateStatusAsync(int id, UpdateOrderStatusRequest request);
+    Task<OrderDto?> CancelAsync(int id, int requesterUserId, bool isAdmin);
 }
 
 // Reads product data and converts it into frontend-friendly DTOs.
@@ -126,7 +127,8 @@ public class CartService(ICartRepository cartRepository, ApplicationDbContext db
                     item.ProductId,
                     item.Quantity,
                     product.Name,
-                    product.Category?.Name ?? string.Empty);
+                    product.Category?.Name ?? string.Empty,
+                    product.RequiresPrescription);
             })
             .ToList();
 
@@ -183,12 +185,15 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
             if ((p.Inventory?.Quantity ?? 0) < item.Quantity) throw new InvalidOperationException($"Insufficient stock for product {p.Name}.");
         }
 
-        // Step 3: If any item needs prescription, verify approved prescription.
+        // Step 3: If any item needs prescription, verify the user has attached a non-rejected prescription.
         if (products.Any(x => x.RequiresPrescription))
         {
             if (!request.PrescriptionId.HasValue) throw new InvalidOperationException("Prescription is required for this order.");
-            var approved = await dbContext.Prescriptions.AnyAsync(x => x.Id == request.PrescriptionId && x.UserId == request.UserId && x.Status == PrescriptionStatus.Approved);
-            if (!approved) throw new InvalidOperationException("Prescription not approved.");
+            var hasValidPrescription = await dbContext.Prescriptions.AnyAsync(x =>
+                x.Id == request.PrescriptionId &&
+                x.UserId == request.UserId &&
+                x.Status != PrescriptionStatus.Rejected);
+            if (!hasValidPrescription) throw new InvalidOperationException("Prescription is invalid or has been rejected.");
         }
 
         // Step 4 onward: create order + items + deduct stock in one transaction.
@@ -291,6 +296,36 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
         await dbContext.SaveChangesAsync();
         var updatedOrder = await orderRepository.GetByIdAsync(id);
         return updatedOrder is null ? null : MapOrder(updatedOrder);
+    }
+
+    public async Task<OrderDto?> CancelAsync(int id, int requesterUserId, bool isAdmin)
+    {
+        var order = await dbContext.Orders
+            .Include(x => x.OrderItems)
+            .ThenInclude(x => x.Product)
+            .ThenInclude(x => x!.Inventory)
+            .FirstOrDefaultAsync(x => x.Id == id);
+
+        if (order is null) return null;
+        if (!isAdmin && order.UserId != requesterUserId) throw new UnauthorizedAccessException("You cannot cancel this order.");
+        if (order.Status == OrderStatus.Cancelled) throw new InvalidOperationException("Order is already cancelled.");
+        if (order.Status == OrderStatus.Delivered) throw new InvalidOperationException("Delivered order cannot be cancelled.");
+
+        foreach (var item in order.OrderItems)
+        {
+            if (item.Product?.Inventory is not null)
+            {
+                item.Product.Inventory.Quantity += item.Quantity;
+                item.Product.Inventory.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        order.Status = OrderStatus.Cancelled;
+        dbContext.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = id, Status = OrderStatus.Cancelled });
+        await dbContext.SaveChangesAsync();
+
+        var cancelledOrder = await orderRepository.GetByIdAsync(id);
+        return cancelledOrder is null ? null : MapOrder(cancelledOrder);
     }
 
     private static OrderDto MapOrder(Order order) =>
