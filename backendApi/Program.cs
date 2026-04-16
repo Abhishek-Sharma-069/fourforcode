@@ -10,8 +10,7 @@ using backendApi.Middleware;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi("v1");
 builder.Services.AddControllers();
 
 // Add DbContext
@@ -72,15 +71,36 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Configure Swagger/OpenAPI
-builder.Services.AddOpenApi();
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.MapOpenApi("/swagger/v1/swagger.json");
+    app.MapGet("/swagger/index.html", () => Results.Redirect("/swagger"));
+    app.MapGet("/swagger", () => Results.Content(
+        """
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>backendApi Swagger UI</title>
+          <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+        </head>
+        <body>
+          <div id="swagger-ui"></div>
+          <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+          <script>
+            window.ui = SwaggerUIBundle({
+              url: '/swagger/v1/swagger.json',
+              dom_id: '#swagger-ui',
+              deepLinking: true,
+              displayRequestDuration: true
+            });
+          </script>
+        </body>
+        </html>
+        """, "text/html"));
 }
 
 app.UseHttpsRedirection();
