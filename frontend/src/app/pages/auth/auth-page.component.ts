@@ -9,41 +9,36 @@ import { AuthService } from '../../core/services/auth.service';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   template: `
-    <div *ngIf="!isLoggedIn(); else loggedInView" class="grid gap-4 lg:grid-cols-3">
-      <section class="rounded-2xl bg-linear-to-br from-cyan-600 to-teal-600 p-6 text-white">
-        <h2 class="text-3xl font-bold">Welcome to MediQuick</h2>
-        <p class="mt-2 text-cyan-100">Order medicines online, upload prescriptions, and track delivery in real time.</p>
-      </section>
-      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 class="text-xl font-semibold text-slate-800">Register</h3>
-        <div class="mt-4 grid gap-3">
-          <input class="rounded-lg border p-2" placeholder="Name" [(ngModel)]="registerName" />
-          <input class="rounded-lg border p-2" placeholder="Email" [(ngModel)]="registerEmail" />
-          <input class="rounded-lg border p-2" placeholder="Password" type="password" [(ngModel)]="registerPassword" />
-        </div>
-        <div class="mt-4">
-          <button class="rounded-lg bg-cyan-600 px-4 py-2 font-medium text-white hover:bg-cyan-500" (click)="register()">Create account</button>
-        </div>
-        <p class="mt-3 text-sm text-slate-600">{{ message }}</p>
-      </section>
+    <div *ngIf="!isLoggedIn(); else loggedInView" class="rounded-3xl bg-cyan-700 py-10 md:py-16">
+      <section class="mx-auto w-[92%] max-w-xl rounded-xl bg-slate-100 p-8 shadow-lg md:p-10">
+        <h2 class="mb-6 text-center text-5xl font-light text-slate-700">Login</h2>
 
-      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 class="text-xl font-semibold text-slate-800">Login</h3>
-        <div class="mt-4 grid gap-3">
-          <input class="rounded-lg border p-2" placeholder="Email" [(ngModel)]="loginEmail" />
-          <input class="rounded-lg border p-2" placeholder="Password" type="password" [(ngModel)]="loginPassword" />
+        <label class="mb-2 block text-base text-slate-700">Email:</label>
+        <input class="mb-5 w-full rounded border border-slate-300 bg-white px-4 py-3 text-lg text-slate-700" placeholder="Enter email" [(ngModel)]="loginEmail" />
+
+        <label class="mb-2 block text-base text-slate-700">Password:</label>
+        <input class="mb-3 w-full rounded border border-slate-300 bg-white px-4 py-3 text-lg text-slate-700" placeholder="Enter password" [type]="showPassword ? 'text' : 'password'" [(ngModel)]="loginPassword" />
+
+        <label class="mb-5 flex items-center gap-2 text-base text-slate-700">
+          <input type="checkbox" [(ngModel)]="showPassword" />
+          Show Password
+        </label>
+
+        <button class="w-full rounded bg-cyan-700 px-4 py-3 text-lg font-medium text-white hover:bg-cyan-600" (click)="login()">SIGN IN</button>
+
+        <div class="mt-6 text-center text-lg text-slate-700">
+          <p>Don't have an account? <button class="text-cyan-700" (click)="register()">Sign up</button></p>
         </div>
-        <div class="mt-4">
-          <button class="rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500" (click)="login()">Sign in</button>
-        </div>
+
+        <p class="mt-3 text-center text-sm text-slate-600">{{ message }}</p>
       </section>
     </div>
 
     <ng-template #loggedInView>
-      <section class="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-        <h3 class="text-xl font-semibold text-emerald-700">You are already logged in</h3>
-        <p class="mt-2 text-emerald-800">Login and Register options are hidden now for better user experience.</p>
-        <a routerLink="/products" class="mt-4 inline-block rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white hover:bg-emerald-500">Go to Medicines</a>
+      <section class="rounded-3xl border border-emerald-700 bg-emerald-950/40 p-6">
+        <h3 class="text-xl font-semibold text-emerald-300">Session Active</h3>
+        <p class="mt-2 text-emerald-200">You are logged in. Access auth cards is hidden by design.</p>
+        <a routerLink="/products" class="mt-4 inline-block rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400">Go to Medicines</a>
       </section>
     </ng-template>
   `
@@ -54,6 +49,7 @@ export class AuthPageComponent {
   registerPassword = '';
   loginEmail = '';
   loginPassword = '';
+  showPassword = false;
   message = '';
   constructor(private readonly authService: AuthService) {}
 
@@ -70,8 +66,10 @@ export class AuthPageComponent {
 
   login() {
     this.authService.login({ email: this.loginEmail, password: this.loginPassword }).subscribe({
-      next: () => {
+      next: (res) => {
         localStorage.setItem('isLoggedIn', 'true');
+        if (res.user?.role) localStorage.setItem('userRole', res.user.role);
+        if (res.user?.id) localStorage.setItem('userId', String(res.user.id));
         this.message = 'Login successful';
       },
       error: err => (this.message = err?.error?.message ?? 'Login failed')

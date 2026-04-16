@@ -13,8 +13,14 @@ export class App {
     return localStorage.getItem('isLoggedIn') === 'true';
   }
 
+  isAdmin(): boolean {
+    return localStorage.getItem('userRole') === 'Admin';
+  }
+
   logout(): void {
     localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userId');
     window.location.href = '/auth';
   }
 }

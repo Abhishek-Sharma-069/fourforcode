@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { API_BASE_URL } from '../config/api.config';
+import { ProductDto } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
@@ -8,10 +9,10 @@ export class ProductService {
   constructor(private readonly http: HttpClient) {}
 
   getProducts() {
-    return this.http.get<any[]>(this.baseUrl);
+    return this.http.get<ProductDto[]>(this.baseUrl);
   }
 
   getProduct(id: number) {
-    return this.http.get<any>(`${this.baseUrl}/${id}`);
+    return this.http.get<ProductDto>(`${this.baseUrl}/${id}`);
   }
 }
