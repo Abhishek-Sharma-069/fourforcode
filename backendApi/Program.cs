@@ -1,4 +1,5 @@
 // This is the starting point of the backend app.
+using Microsoft.Extensions.FileProviders;
 // Think of it as the "main control room" where we connect all backend parts.
 using Microsoft.EntityFrameworkCore;
 using backendApi.Data;
@@ -110,6 +111,15 @@ app.UseHttpsRedirection();
 app.UseMiddleware<GlobalExceptionMiddleware>();
 // CORS lets frontend call backend from another origin/port.
 app.UseCors("FrontendDev");
+
+// Serve uploaded prescription images as static files.
+var uploadsDir = Path.Combine(app.Environment.ContentRootPath, "Uploads");
+if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsDir),
+    RequestPath = "/uploads"
+});
 
 // Enforce login checks and role checks.
 app.UseAuthentication();

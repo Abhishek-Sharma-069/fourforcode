@@ -58,6 +58,7 @@ public class OrderRepository(ApplicationDbContext dbContext) : IOrderRepository
     public Task<Order?> GetByIdAsync(int id) =>
         dbContext.Orders
             .Include(x => x.OrderItems)
+            .ThenInclude(x => x.Product)
             .Include(x => x.StatusHistory)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
@@ -65,6 +66,7 @@ public class OrderRepository(ApplicationDbContext dbContext) : IOrderRepository
     public Task<List<Order>> GetByUserIdAsync(int userId) =>
         dbContext.Orders
             .Include(x => x.OrderItems)
+            .ThenInclude(x => x.Product)
             .Include(x => x.StatusHistory)
             .AsNoTracking()
             .Where(x => x.UserId == userId)

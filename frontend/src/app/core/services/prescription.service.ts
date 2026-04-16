@@ -8,6 +8,10 @@ export class PrescriptionService {
   private readonly baseUrl = `${API_BASE_URL}/api/prescriptions`;
   constructor(private readonly http: HttpClient) {}
 
+  upload(userId: number, fileUrl: string) {
+    return this.http.post<PrescriptionDto>(`${this.baseUrl}/upload`, { userId, fileUrl }, { withCredentials: true });
+  }
+
   getByUser(userId: number) {
     return this.http.get<PrescriptionDto[]>(`${this.baseUrl}/${userId}`, { withCredentials: true });
   }

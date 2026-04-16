@@ -2,7 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CartService } from '../../core/services/cart.service';
-import { CartItemDto } from '../../core/models/api.models';
+import { OrderService } from '../../core/services/order.service';
+import { PrescriptionService } from '../../core/services/prescription.service';
+import { CartItemDto, mapPrescriptionToViewModel, PrescriptionViewModel } from '../../core/models/api.models';
 
 @Component({
   selector: 'app-cart-page',
@@ -17,12 +19,14 @@ import { CartItemDto } from '../../core/models/api.models';
         <article *ngFor="let item of items" class="rounded-2xl border border-slate-800 bg-slate-900 p-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs uppercase tracking-wide text-slate-400">Product</p>
-              <h3 class="font-semibold">#{{ item.productId }}</h3>
+              <p class="text-xs uppercase tracking-wide text-slate-400">{{ item.category || 'Medicine' }}</p>
+              <h3 class="font-semibold">{{ item.productName || ('#' + item.productId) }}</h3>
+              <p class="text-xs text-slate-500">Product ID: {{ item.productId }}</p>
             </div>
             <div class="flex items-center gap-2">
               <input type="number" class="w-20 rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm" [(ngModel)]="item.quantity" />
               <button class="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400" (click)="update(item.productId, item.quantity)">Update</button>
+              <button class="rounded-lg border border-emerald-700 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/40 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500" [disabled]="placingOrder" (click)="checkout(item.productId)">Checkout</button>
               <button class="rounded-lg bg-rose-500 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-400" (click)="remove(item.productId)">Remove</button>
             </div>
           </div>
@@ -37,22 +41,42 @@ import { CartItemDto } from '../../core/models/api.models';
           <p>Shipping: <span class="font-semibold text-emerald-400">Free</span></p>
           <p>Protection: <span class="font-semibold text-cyan-300">Enabled</span></p>
         </div>
-        <a href="/checkout" class="mt-4 inline-block w-full rounded-lg bg-emerald-500 px-3 py-2 text-center text-sm font-semibold text-slate-950 hover:bg-emerald-400">Proceed to Checkout</a>
+        <div *ngIf="hasApprovedPrescriptions" class="mt-4">
+          <label class="mb-1 block text-xs uppercase tracking-wide text-slate-400">Approved prescription</label>
+          <select class="w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm" [(ngModel)]="selectedPrescriptionId">
+            <option value="">Select approved prescription</option>
+            <option *ngFor="let prescription of approvedPrescriptions" [value]="prescription.id">
+              #{{ prescription.id }} • {{ prescription.fileUrl }}
+            </option>
+          </select>
+        </div>
+        <button class="mt-4 w-full rounded-lg bg-emerald-500 px-3 py-2 text-center text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" [disabled]="placingOrder || items.length === 0" (click)="checkout()">
+          {{ placingOrder ? 'Placing Order...' : 'Checkout All Items' }}
+        </button>
       </aside>
     </div>
   `
 })
 export class CartPageComponent implements OnInit {
   items: CartItemDto[] = [];
+  approvedPrescriptions: PrescriptionViewModel[] = [];
+  selectedPrescriptionId = '';
   loading = false;
+  placingOrder = false;
   errorMessage = '';
-  constructor(private readonly cartService: CartService) {}
+  constructor(
+    private readonly cartService: CartService,
+    private readonly orderService: OrderService,
+    private readonly prescriptionService: PrescriptionService
+  ) {}
   ngOnInit(): void { this.refresh(); }
   private refresh() {
     const userId = this.getCurrentUserId();
     if (!userId) {
       this.loading = false;
       this.items = [];
+      this.approvedPrescriptions = [];
+      this.selectedPrescriptionId = '';
       this.errorMessage = 'Please login first to view your cart.';
       return;
     }
@@ -62,11 +86,12 @@ export class CartPageComponent implements OnInit {
     this.cartService.get(userId).subscribe({
       next: (x) => {
         this.items = x.items ?? [];
-        this.loading = false;
+        this.loadApprovedPrescriptions(userId);
       },
       error: (err) => {
         this.loading = false;
         this.items = [];
+        this.approvedPrescriptions = [];
         this.errorMessage = err?.error?.message ?? 'Unable to fetch cart. Please login first.';
       }
     });
@@ -96,6 +121,37 @@ export class CartPageComponent implements OnInit {
     });
   }
 
+  checkout(productId?: number) {
+    const userId = this.getCurrentUserId();
+    if (!userId) {
+      this.errorMessage = 'Please login first to place an order.';
+      return;
+    }
+
+    if (this.items.length === 0) {
+      this.errorMessage = 'Your cart is empty.';
+      return;
+    }
+
+    const prescriptionId = this.selectedPrescriptionId ? Number(this.selectedPrescriptionId) : undefined;
+    this.placingOrder = true;
+    this.errorMessage = '';
+    this.orderService.placeOrder(userId, prescriptionId, productId).subscribe({
+      next: () => {
+        this.placingOrder = false;
+        this.refresh();
+      },
+      error: (err) => {
+        this.placingOrder = false;
+        this.errorMessage = err?.error?.message ?? 'Failed to place order.';
+      }
+    });
+  }
+
+  get hasApprovedPrescriptions(): boolean {
+    return this.approvedPrescriptions.length > 0;
+  }
+
   private getCurrentUserId(): number | null {
     const rawUserId = localStorage.getItem('userId');
     if (!rawUserId) {
@@ -104,5 +160,30 @@ export class CartPageComponent implements OnInit {
 
     const userId = Number(rawUserId);
     return Number.isFinite(userId) && userId > 0 ? userId : null;
+  }
+
+  private loadApprovedPrescriptions(userId: number): void {
+    this.prescriptionService.getByUser(userId).subscribe({
+      next: (items) => {
+        this.approvedPrescriptions = items
+          .map(mapPrescriptionToViewModel)
+          .filter((prescription) => prescription.status === 'Approved');
+
+        if (this.selectedPrescriptionId && !this.approvedPrescriptions.some((item) => item.id === Number(this.selectedPrescriptionId))) {
+          this.selectedPrescriptionId = '';
+        }
+
+        if (!this.selectedPrescriptionId && this.approvedPrescriptions.length === 1) {
+          this.selectedPrescriptionId = String(this.approvedPrescriptions[0].id);
+        }
+
+        this.loading = false;
+      },
+      error: () => {
+        this.approvedPrescriptions = [];
+        this.selectedPrescriptionId = '';
+        this.loading = false;
+      }
+    });
   }
 }

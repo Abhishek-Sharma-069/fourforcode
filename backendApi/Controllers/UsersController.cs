@@ -65,5 +65,18 @@ namespace backendApi.Controllers
 
             return Ok(response);
         }
+
+        [HttpPost("logout")]
+        // Clears the secure auth cookie to log the user out.
+        public IActionResult Logout()
+        {
+            Response.Cookies.Delete("auth_token", new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = Request.IsHttps,
+                SameSite = SameSiteMode.Lax
+            });
+            return Ok();
+        }
     }
 }

@@ -34,10 +34,10 @@ public interface IPrescriptionService
 // Order service contract.
 public interface IOrderService
 {
-    Task<Order> PlaceOrderAsync(PlaceOrderRequest request);
-    Task<Order?> GetByIdAsync(int id);
-    Task<List<Order>> GetByUserAsync(int userId);
-    Task<Order?> UpdateStatusAsync(int id, UpdateOrderStatusRequest request);
+    Task<OrderDto> PlaceOrderAsync(PlaceOrderRequest request);
+    Task<OrderDto?> GetByIdAsync(int id);
+    Task<List<OrderDto>> GetByUserAsync(int userId);
+    Task<OrderDto?> UpdateStatusAsync(int id, UpdateOrderStatusRequest request);
 }
 
 // Reads product data and converts it into frontend-friendly DTOs.
@@ -70,13 +70,14 @@ public class CartService(ICartRepository cartRepository, ApplicationDbContext db
         else items[items.IndexOf(existing)] = existing with { Quantity = existing.Quantity + request.Quantity };
         cart.CartItems = JsonSerializer.Serialize(items);
         await cartRepository.SaveAsync();
-        return new CartDto(request.UserId, items);
+        return await BuildCartDtoAsync(request.UserId, items);
     }
 
     public async Task<CartDto> GetCartAsync(int userId)
     {
         var cart = await cartRepository.GetOrCreateAsync(userId);
-        return new CartDto(userId, JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? []);
+        var items = JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? [];
+        return await BuildCartDtoAsync(userId, items);
     }
 
     public async Task<CartDto> UpdateCartAsync(CartUpdateRequest request)
@@ -91,7 +92,7 @@ public class CartService(ICartRepository cartRepository, ApplicationDbContext db
         items[index] = items[index] with { Quantity = request.Quantity };
         cart.CartItems = JsonSerializer.Serialize(items);
         await cartRepository.SaveAsync();
-        return new CartDto(request.UserId, items);
+        return await BuildCartDtoAsync(request.UserId, items);
     }
 
     public async Task<CartDto> RemoveFromCartAsync(CartRemoveRequest request)
@@ -101,7 +102,35 @@ public class CartService(ICartRepository cartRepository, ApplicationDbContext db
         items = items.Where(x => x.ProductId != request.ProductId).ToList();
         cart.CartItems = JsonSerializer.Serialize(items);
         await cartRepository.SaveAsync();
-        return new CartDto(request.UserId, items);
+        return await BuildCartDtoAsync(request.UserId, items);
+    }
+
+    private async Task<CartDto> BuildCartDtoAsync(int userId, List<CartItemDto> items)
+    {
+        var productIds = items.Select(x => x.ProductId).Distinct().ToList();
+        var productLookup = await dbContext.Products
+            .Include(x => x.Category)
+            .AsNoTracking()
+            .Where(x => productIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+
+        var responseItems = items
+            .Select(item =>
+            {
+                if (!productLookup.TryGetValue(item.ProductId, out var product))
+                {
+                    throw new InvalidOperationException($"Product {item.ProductId} not found.");
+                }
+
+                return new CartItemResponseDto(
+                    item.ProductId,
+                    item.Quantity,
+                    product.Name,
+                    product.Category?.Name ?? string.Empty);
+            })
+            .ToList();
+
+        return new CartDto(userId, responseItems);
     }
 }
 
@@ -133,11 +162,15 @@ public class PrescriptionService(ApplicationDbContext dbContext) : IPrescription
 // Handles order placement with stock checks and DB transaction safety.
 public class OrderService(ApplicationDbContext dbContext, IOrderRepository orderRepository, ICartRepository cartRepository) : IOrderService
 {
-    public async Task<Order> PlaceOrderAsync(PlaceOrderRequest request)
+    public async Task<OrderDto> PlaceOrderAsync(PlaceOrderRequest request)
     {
         // Step 1: Read cart.
         var cart = await cartRepository.GetOrCreateAsync(request.UserId);
-        var cartItems = JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? [];
+        var allCartItems = JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? [];
+        var cartItems = request.ProductId.HasValue
+            ? allCartItems.Where(x => x.ProductId == request.ProductId.Value).ToList()
+            : allCartItems;
+
         if (cartItems.Count == 0) throw new InvalidOperationException("Cart is empty.");
 
         var productIds = cartItems.Select(x => x.ProductId).Distinct().ToList();
@@ -194,17 +227,47 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
         }
 
         dbContext.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = order.Id, Status = OrderStatus.Placed });
-        cart.CartItems = "[]";
+        if (request.ProductId.HasValue)
+        {
+            var remainingItems = allCartItems.Where(x => x.ProductId != request.ProductId.Value).ToList();
+            cart.CartItems = JsonSerializer.Serialize(remainingItems);
+        }
+        else
+        {
+            cart.CartItems = "[]";
+        }
+
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
 
-        return await orderRepository.GetByIdAsync(order.Id) ?? order;
+        order.OrderItems = cartItems.Select(item =>
+        {
+            var product = products.First(x => x.Id == item.ProductId);
+            return new OrderItem
+            {
+                Id = 0,
+                OrderId = order.Id,
+                ProductId = product.Id,
+                Quantity = item.Quantity,
+                Price = product.Price,
+                Product = product
+            };
+        }).ToList();
+        order.StatusHistory = [new OrderStatusHistory { Id = 0, OrderId = order.Id, Status = OrderStatus.Placed, UpdatedAt = DateTime.UtcNow }];
+
+        return MapOrder(order);
     }
 
-    public Task<Order?> GetByIdAsync(int id) => orderRepository.GetByIdAsync(id);
-    public Task<List<Order>> GetByUserAsync(int userId) => orderRepository.GetByUserIdAsync(userId);
+    public async Task<OrderDto?> GetByIdAsync(int id)
+    {
+        var order = await orderRepository.GetByIdAsync(id);
+        return order is null ? null : MapOrder(order);
+    }
 
-    public async Task<Order?> UpdateStatusAsync(int id, UpdateOrderStatusRequest request)
+    public async Task<List<OrderDto>> GetByUserAsync(int userId) =>
+        (await orderRepository.GetByUserIdAsync(userId)).Select(MapOrder).ToList();
+
+    public async Task<OrderDto?> UpdateStatusAsync(int id, UpdateOrderStatusRequest request)
     {
         var order = await dbContext.Orders.FirstOrDefaultAsync(x => x.Id == id);
         if (order is null) return null;
@@ -226,6 +289,24 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
         order.Status = request.Status;
         dbContext.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = id, Status = request.Status });
         await dbContext.SaveChangesAsync();
-        return await orderRepository.GetByIdAsync(id);
+        var updatedOrder = await orderRepository.GetByIdAsync(id);
+        return updatedOrder is null ? null : MapOrder(updatedOrder);
     }
+
+    private static OrderDto MapOrder(Order order) =>
+        new(
+            order.Id,
+            order.UserId,
+            order.PrescriptionId,
+            order.TotalAmount,
+            order.Status,
+            order.CreatedAt,
+            order.OrderItems
+                .OrderBy(x => x.Id)
+                .Select(x => new OrderItemDto(x.Id, x.OrderId, x.ProductId, x.Quantity, x.Price, x.Product?.Name ?? string.Empty))
+                .ToList(),
+            order.StatusHistory
+                .OrderBy(x => x.UpdatedAt)
+                .Select(x => new OrderStatusHistoryDto(x.Id, x.OrderId, x.Status, x.UpdatedAt))
+                .ToList());
 }

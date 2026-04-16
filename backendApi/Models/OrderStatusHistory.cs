@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace backendApi.Models;
 
 // Stores timeline/history of status changes for an order.
@@ -8,5 +10,6 @@ public class OrderStatusHistory
     public OrderStatus Status { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    [JsonIgnore]
     public Order? Order { get; set; }
 }

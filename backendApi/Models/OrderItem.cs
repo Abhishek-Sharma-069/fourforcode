@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace backendApi.Models;
 
 // One line item inside an order.
@@ -9,6 +11,7 @@ public class OrderItem
     public int Quantity { get; set; }
     public decimal Price { get; set; }
 
+    [JsonIgnore]
     public Order? Order { get; set; }
     public Product? Product { get; set; }
 }

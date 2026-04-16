@@ -8,8 +8,8 @@ export class OrderService {
   private readonly baseUrl = `${API_BASE_URL}/api/orders`;
   constructor(private readonly http: HttpClient) {}
 
-  placeOrder(userId: number, prescriptionId?: number) {
-    return this.http.post<OrderDto>(this.baseUrl, { userId, prescriptionId }, { withCredentials: true });
+  placeOrder(userId: number, prescriptionId?: number, productId?: number) {
+    return this.http.post<OrderDto>(this.baseUrl, { userId, prescriptionId, productId }, { withCredentials: true });
   }
 
   getByUser(userId: number) {

@@ -7,8 +7,16 @@ namespace backendApi.DTOs;
 public record ProductDto(int Id, string Name, int CategoryId, decimal Price, string Dosage, string Packaging, bool RequiresPrescription, int Quantity);
 // One item inside cart JSON.
 public record CartItemDto(int ProductId, int Quantity);
+// Enriched cart item returned by API.
+public record CartItemResponseDto(int ProductId, int Quantity, string ProductName, string Category);
 // Cart response shape.
-public record CartDto(int UserId, List<CartItemDto> Items);
+public record CartDto(int UserId, List<CartItemResponseDto> Items);
+// One item inside order response.
+public record OrderItemDto(int Id, int OrderId, int ProductId, int Quantity, decimal Price, string ProductName);
+// One status-history entry inside order response.
+public record OrderStatusHistoryDto(int Id, int OrderId, OrderStatus Status, DateTime ChangedAt);
+// Order response shape.
+public record OrderDto(int Id, int UserId, int? PrescriptionId, decimal TotalAmount, OrderStatus Status, DateTime CreatedAt, List<OrderItemDto> OrderItems, List<OrderStatusHistoryDto> StatusHistory);
 
 // Request body for add-to-cart API.
 public class CartAddRequest
@@ -52,6 +60,7 @@ public class PlaceOrderRequest
 {
     [Required] public int UserId { get; set; }
     public int? PrescriptionId { get; set; }
+    public int? ProductId { get; set; }
 }
 
 // Request body for admin order status update.

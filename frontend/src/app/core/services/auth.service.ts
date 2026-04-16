@@ -19,4 +19,8 @@ export class AuthService {
       { withCredentials: true }
     );
   }
+
+  logout() {
+    return this.http.post(`${this.baseUrl}/logout`, {}, { withCredentials: true });
+  }
 }
