@@ -48,6 +48,18 @@ namespace backendApi.Controllers
                 return Unauthorized(response);
             }
 
+            if (!string.IsNullOrWhiteSpace(response.Token))
+            {
+                Response.Cookies.Append("auth_token", response.Token, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = Request.IsHttps,
+                    SameSite = SameSiteMode.Lax,
+                    Expires = DateTimeOffset.UtcNow.AddDays(7),
+                    IsEssential = true
+                });
+            }
+
             return Ok(response);
         }
     }

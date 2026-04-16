@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace backendApi.Services
 {
@@ -24,7 +25,7 @@ namespace backendApi.Services
             try
             {
                 // Check if user already exists
-                var existingUser = _dbContext.Users.FirstOrDefault(u => u.Email == request.Email);
+                var existingUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
                 if (existingUser != null)
                 {
                     return new RegisterResponse
@@ -43,6 +44,7 @@ namespace backendApi.Services
                     Name = request.Name,
                     Email = request.Email,
                     PasswordHash = passwordHash,
+                    Role = UserRole.User,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -58,6 +60,7 @@ namespace backendApi.Services
                         Id = user.Id,
                         Name = user.Name,
                         Email = user.Email,
+                        Role = user.Role.ToString(),
                         CreatedAt = user.CreatedAt
                     }
                 };
@@ -77,7 +80,7 @@ namespace backendApi.Services
             try
             {
                 // Find user by email
-                var user = _dbContext.Users.FirstOrDefault(u => u.Email == request.Email);
+                var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
                 if (user == null)
                 {
                     return new LoginResponse
@@ -111,6 +114,7 @@ namespace backendApi.Services
                         Id = user.Id,
                         Name = user.Name,
                         Email = user.Email,
+                        Role = user.Role.ToString(),
                         CreatedAt = user.CreatedAt
                     }
                 };
@@ -131,6 +135,7 @@ namespace backendApi.Services
             var secretKey = jwtSettings["SecretKey"] ?? "your-super-secret-key-here-make-it-long-and-secure";
             var issuer = jwtSettings["Issuer"] ?? "backendApi";
             var audience = jwtSettings["Audience"] ?? "backendApi-users";
+            var expiryMinutes = int.TryParse(jwtSettings["ExpiryInMinutes"], out var parsedMinutes) ? parsedMinutes : 10080;
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -140,6 +145,7 @@ namespace backendApi.Services
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
                 new Claim(JwtRegisteredClaimNames.Name, user.Name),
+                new Claim(ClaimTypes.Role, user.Role.ToString().ToUpperInvariant()),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
@@ -147,7 +153,7 @@ namespace backendApi.Services
                 issuer: issuer,
                 audience: audience,
                 claims: claims,
-                expires: DateTime.Now.AddHours(24),
+                expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
                 signingCredentials: credentials
             );
 
