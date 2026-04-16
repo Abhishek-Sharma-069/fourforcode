@@ -4,6 +4,8 @@ using backendApi.Configurations;
 
 namespace backendApi.Data
 {
+    // This class is the "database map" for the whole application.
+    // Each DbSet below represents one table in PostgreSQL.
     public class ApplicationDbContext : DbContext
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
@@ -20,6 +22,7 @@ namespace backendApi.Data
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<OrderStatusHistory> OrderStatusHistories { get; set; }
 
+        // This method tells Entity Framework how tables and relationships should look.
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

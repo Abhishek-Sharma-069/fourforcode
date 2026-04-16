@@ -1,11 +1,13 @@
 namespace backendApi.Models;
 
+// Role values for app users.
 public enum UserRole
 {
     User = 0,
     Admin = 1
 }
 
+// Review status of prescription.
 public enum PrescriptionStatus
 {
     Pending = 0,
@@ -13,6 +15,7 @@ public enum PrescriptionStatus
     Rejected = 2
 }
 
+// Delivery journey states of order.
 public enum OrderStatus
 {
     Placed = 0,

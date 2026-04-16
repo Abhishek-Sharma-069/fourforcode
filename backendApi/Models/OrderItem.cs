@@ -1,5 +1,6 @@
 namespace backendApi.Models;
 
+// One line item inside an order.
 public class OrderItem
 {
     public int Id { get; set; }

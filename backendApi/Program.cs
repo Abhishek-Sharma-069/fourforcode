@@ -1,3 +1,5 @@
+// This is the starting point of the backend app.
+// Think of it as the "main control room" where we connect all backend parts.
 using Microsoft.EntityFrameworkCore;
 using backendApi.Data;
 using backendApi.Services;
@@ -9,15 +11,15 @@ using backendApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Register features (services) that the app will use.
 builder.Services.AddOpenApi("v1");
 builder.Services.AddControllers();
 
-// Add DbContext
+// Connect Entity Framework to PostgreSQL database.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Add app services
+// Register business logic classes and repositories.
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ICartRepository, CartRepository>();
@@ -27,7 +29,7 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IPrescriptionService, PrescriptionService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 
-// Add JWT Authentication
+// Configure JWT authentication (how login tokens are validated).
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -58,7 +60,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Add Authorization
+// Configure authorization (who can access which APIs).
 builder.Services.AddAuthorization();
 builder.Services.AddCors(options =>
 {
@@ -73,7 +75,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// In development mode, expose OpenAPI docs + Swagger screen.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi("/swagger/v1/swagger.json");
@@ -104,13 +106,16 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+// Global exception handler gives user-friendly error JSON.
 app.UseMiddleware<GlobalExceptionMiddleware>();
+// CORS lets frontend call backend from another origin/port.
 app.UseCors("FrontendDev");
 
-// Add authentication and authorization middleware
+// Enforce login checks and role checks.
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Expose all controller routes.
 app.MapControllers();
 
 app.Run();

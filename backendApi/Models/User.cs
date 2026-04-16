@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backendApi.Models
 {
+    // Represents one user account row in database.
     public class User
     {
         public int Id { get; set; }

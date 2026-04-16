@@ -1,5 +1,6 @@
 namespace backendApi.Models;
 
+// Stores timeline/history of status changes for an order.
 public class OrderStatusHistory
 {
     public int Id { get; set; }

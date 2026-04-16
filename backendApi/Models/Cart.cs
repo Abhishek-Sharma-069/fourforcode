@@ -1,5 +1,6 @@
 namespace backendApi.Models;
 
+// Shopping cart for one user (items stored as JSON text).
 public class Cart
 {
     public int Id { get; set; }

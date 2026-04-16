@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backendApi.Controllers
 {
+    // This controller handles user account APIs like register and login.
     [ApiController]
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
@@ -16,6 +17,7 @@ namespace backendApi.Controllers
         }
 
         [HttpPost("register")]
+        // Creates a new user account.
         public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
         {
             if (!ModelState.IsValid)
@@ -34,6 +36,7 @@ namespace backendApi.Controllers
         }
 
         [HttpPost("login")]
+        // Verifies user credentials and sets secure auth cookie.
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
         {
             if (!ModelState.IsValid)

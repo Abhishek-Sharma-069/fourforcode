@@ -7,12 +7,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backendApi.Services;
 
+// Product service contract.
 public interface IProductService
 {
     Task<List<ProductDto>> GetProductsAsync();
     Task<ProductDto?> GetProductAsync(int id);
 }
 
+// Cart service contract.
 public interface ICartService
 {
     Task<CartDto> AddToCartAsync(CartAddRequest request);
@@ -21,6 +23,7 @@ public interface ICartService
     Task<CartDto> RemoveFromCartAsync(CartRemoveRequest request);
 }
 
+// Prescription service contract.
 public interface IPrescriptionService
 {
     Task<Prescription> UploadAsync(UploadPrescriptionRequest request);
@@ -28,6 +31,7 @@ public interface IPrescriptionService
     Task<Prescription?> ReviewAsync(int id, ReviewPrescriptionRequest request);
 }
 
+// Order service contract.
 public interface IOrderService
 {
     Task<Order> PlaceOrderAsync(PlaceOrderRequest request);
@@ -36,6 +40,7 @@ public interface IOrderService
     Task<Order?> UpdateStatusAsync(int id, UpdateOrderStatusRequest request);
 }
 
+// Reads product data and converts it into frontend-friendly DTOs.
 public class ProductService(IProductRepository productRepository) : IProductService
 {
     public async Task<List<ProductDto>> GetProductsAsync() =>
@@ -50,10 +55,14 @@ public class ProductService(IProductRepository productRepository) : IProductServ
     }
 }
 
-public class CartService(ICartRepository cartRepository) : ICartService
+// Handles all cart operations and stores cart items as JSON.
+public class CartService(ICartRepository cartRepository, ApplicationDbContext dbContext) : ICartService
 {
     public async Task<CartDto> AddToCartAsync(CartAddRequest request)
     {
+        var productExists = await dbContext.Products.AnyAsync(x => x.Id == request.ProductId);
+        if (!productExists) throw new InvalidOperationException("Product not found.");
+
         var cart = await cartRepository.GetOrCreateAsync(request.UserId);
         var items = JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? [];
         var existing = items.FirstOrDefault(x => x.ProductId == request.ProductId);
@@ -72,10 +81,14 @@ public class CartService(ICartRepository cartRepository) : ICartService
 
     public async Task<CartDto> UpdateCartAsync(CartUpdateRequest request)
     {
+        var productExists = await dbContext.Products.AnyAsync(x => x.Id == request.ProductId);
+        if (!productExists) throw new InvalidOperationException("Product not found.");
+
         var cart = await cartRepository.GetOrCreateAsync(request.UserId);
         var items = JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? [];
         var index = items.FindIndex(x => x.ProductId == request.ProductId);
-        if (index >= 0) items[index] = items[index] with { Quantity = request.Quantity };
+        if (index < 0) throw new InvalidOperationException("Product is not present in cart.");
+        items[index] = items[index] with { Quantity = request.Quantity };
         cart.CartItems = JsonSerializer.Serialize(items);
         await cartRepository.SaveAsync();
         return new CartDto(request.UserId, items);
@@ -92,6 +105,7 @@ public class CartService(ICartRepository cartRepository) : ICartService
     }
 }
 
+// Handles upload/review flow of prescriptions.
 public class PrescriptionService(ApplicationDbContext dbContext) : IPrescriptionService
 {
     public async Task<Prescription> UploadAsync(UploadPrescriptionRequest request)
@@ -116,10 +130,12 @@ public class PrescriptionService(ApplicationDbContext dbContext) : IPrescription
     }
 }
 
+// Handles order placement with stock checks and DB transaction safety.
 public class OrderService(ApplicationDbContext dbContext, IOrderRepository orderRepository, ICartRepository cartRepository) : IOrderService
 {
     public async Task<Order> PlaceOrderAsync(PlaceOrderRequest request)
     {
+        // Step 1: Read cart.
         var cart = await cartRepository.GetOrCreateAsync(request.UserId);
         var cartItems = JsonSerializer.Deserialize<List<CartItemDto>>(cart.CartItems) ?? [];
         if (cartItems.Count == 0) throw new InvalidOperationException("Cart is empty.");
@@ -127,12 +143,14 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
         var productIds = cartItems.Select(x => x.ProductId).Distinct().ToList();
         var products = await dbContext.Products.Include(x => x.Inventory).Where(x => productIds.Contains(x.Id)).ToListAsync();
 
+        // Step 2: Validate stock.
         foreach (var item in cartItems)
         {
             var p = products.FirstOrDefault(x => x.Id == item.ProductId) ?? throw new InvalidOperationException("Product not found.");
             if ((p.Inventory?.Quantity ?? 0) < item.Quantity) throw new InvalidOperationException($"Insufficient stock for product {p.Name}.");
         }
 
+        // Step 3: If any item needs prescription, verify approved prescription.
         if (products.Any(x => x.RequiresPrescription))
         {
             if (!request.PrescriptionId.HasValue) throw new InvalidOperationException("Prescription is required for this order.");
@@ -140,6 +158,7 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
             if (!approved) throw new InvalidOperationException("Prescription not approved.");
         }
 
+        // Step 4 onward: create order + items + deduct stock in one transaction.
         await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
         var order = new Order
@@ -189,6 +208,21 @@ public class OrderService(ApplicationDbContext dbContext, IOrderRepository order
     {
         var order = await dbContext.Orders.FirstOrDefaultAsync(x => x.Id == id);
         if (order is null) return null;
+
+        var allowedTransitions = new Dictionary<OrderStatus, OrderStatus>
+        {
+            [OrderStatus.Placed] = OrderStatus.Confirmed,
+            [OrderStatus.Confirmed] = OrderStatus.Packed,
+            [OrderStatus.Packed] = OrderStatus.Shipped,
+            [OrderStatus.Shipped] = OrderStatus.OutForDelivery,
+            [OrderStatus.OutForDelivery] = OrderStatus.Delivered
+        };
+
+        if (!allowedTransitions.TryGetValue(order.Status, out var nextStatus) || nextStatus != request.Status)
+        {
+            throw new InvalidOperationException($"Invalid status transition from {order.Status} to {request.Status}.");
+        }
+
         order.Status = request.Status;
         dbContext.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = id, Status = request.Status });
         await dbContext.SaveChangesAsync();

@@ -4,18 +4,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backendApi.Repositories;
 
+// Product database access contract.
 public interface IProductRepository
 {
     Task<List<Product>> GetAllAsync();
     Task<Product?> GetByIdAsync(int id);
 }
 
+// Cart database access contract.
 public interface ICartRepository
 {
     Task<Cart> GetOrCreateAsync(int userId);
     Task SaveAsync();
 }
 
+// Order database access contract.
 public interface IOrderRepository
 {
     Task<Order?> GetByIdAsync(int id);
@@ -23,6 +26,7 @@ public interface IOrderRepository
     Task SaveAsync();
 }
 
+// Data-layer class for product table operations.
 public class ProductRepository(ApplicationDbContext dbContext) : IProductRepository
 {
     public Task<List<Product>> GetAllAsync() =>
@@ -32,6 +36,7 @@ public class ProductRepository(ApplicationDbContext dbContext) : IProductReposit
         dbContext.Products.Include(x => x.Inventory).AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
 }
 
+// Data-layer class for cart table operations.
 public class CartRepository(ApplicationDbContext dbContext) : ICartRepository
 {
     public async Task<Cart> GetOrCreateAsync(int userId)
@@ -47,6 +52,7 @@ public class CartRepository(ApplicationDbContext dbContext) : ICartRepository
     public Task SaveAsync() => dbContext.SaveChangesAsync();
 }
 
+// Data-layer class for order table operations.
 public class OrderRepository(ApplicationDbContext dbContext) : IOrderRepository
 {
     public Task<Order?> GetByIdAsync(int id) =>

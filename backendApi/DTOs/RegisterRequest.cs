@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backendApi.DTOs
 {
+    // Data sent by frontend to create a new account.
     public class RegisterRequest
     {
         [Required(ErrorMessage = "Name is required")]

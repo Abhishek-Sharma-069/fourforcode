@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backendApi.Models;
 
+// One medicine product sold in the pharmacy store.
 public class Product
 {
     public int Id { get; set; }

@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backendApi.Services
 {
+    // Contains the real logic for register/login and JWT token creation.
     public class UserService : IUserService
     {
         private readonly ApplicationDbContext _dbContext;
@@ -131,6 +132,7 @@ namespace backendApi.Services
 
         private string GenerateJwtToken(User user)
         {
+            // Build token settings from appsettings.json.
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"] ?? "your-super-secret-key-here-make-it-long-and-secure";
             var issuer = jwtSettings["Issuer"] ?? "backendApi";
@@ -140,9 +142,11 @@ namespace backendApi.Services
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
+            // These claims are small user details embedded inside token.
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
                 new Claim(JwtRegisteredClaimNames.Name, user.Name),
                 new Claim(ClaimTypes.Role, user.Role.ToString().ToUpperInvariant()),

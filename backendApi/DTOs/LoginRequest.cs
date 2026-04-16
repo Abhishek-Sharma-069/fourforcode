@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace backendApi.DTOs
 {
+    // Data sent by frontend when user tries to login.
     public class LoginRequest
     {
         [Required(ErrorMessage = "Email is required")]

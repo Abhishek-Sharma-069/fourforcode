@@ -1,5 +1,6 @@
 namespace backendApi.Models;
 
+// Current stock quantity for one product.
 public class Inventory
 {
     public int ProductId { get; set; }

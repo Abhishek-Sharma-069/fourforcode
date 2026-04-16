@@ -1,5 +1,6 @@
 namespace backendApi.Models;
 
+// Prescription uploaded by user for restricted medicines.
 public class Prescription
 {
     public int Id { get; set; }

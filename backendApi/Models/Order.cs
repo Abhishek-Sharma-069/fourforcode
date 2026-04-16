@@ -1,5 +1,6 @@
 namespace backendApi.Models;
 
+// Customer order created during checkout.
 public class Order
 {
     public int Id { get; set; }

@@ -5,20 +5,49 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace backendApi.Controllers;
 
+// Cart APIs: add items, read cart, update item quantity, remove item.
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
 public class CartController(ICartService cartService) : ControllerBase
 {
     [HttpPost("add")]
-    public async Task<IActionResult> Add([FromBody] CartAddRequest request) => Ok(await cartService.AddToCartAsync(request));
+    // Adds a product into user's cart.
+    public async Task<IActionResult> Add([FromBody] CartAddRequest request)
+    {
+        var userId = this.GetAuthenticatedUserId();
+        if (!userId.HasValue) return Unauthorized();
+        if (!this.IsAdmin() && userId.Value != request.UserId) return Forbid();
+        return Ok(await cartService.AddToCartAsync(request));
+    }
 
     [HttpGet("{userId:int}")]
-    public async Task<IActionResult> Get(int userId) => Ok(await cartService.GetCartAsync(userId));
+    // Reads cart for one user.
+    public async Task<IActionResult> Get(int userId)
+    {
+        var authUserId = this.GetAuthenticatedUserId();
+        if (!authUserId.HasValue) return Unauthorized();
+        if (!this.IsAdmin() && authUserId.Value != userId) return Forbid();
+        return Ok(await cartService.GetCartAsync(userId));
+    }
 
     [HttpPut("update")]
-    public async Task<IActionResult> Update([FromBody] CartUpdateRequest request) => Ok(await cartService.UpdateCartAsync(request));
+    // Changes quantity of an existing cart item.
+    public async Task<IActionResult> Update([FromBody] CartUpdateRequest request)
+    {
+        var userId = this.GetAuthenticatedUserId();
+        if (!userId.HasValue) return Unauthorized();
+        if (!this.IsAdmin() && userId.Value != request.UserId) return Forbid();
+        return Ok(await cartService.UpdateCartAsync(request));
+    }
 
     [HttpDelete("remove")]
-    public async Task<IActionResult> Remove([FromBody] CartRemoveRequest request) => Ok(await cartService.RemoveFromCartAsync(request));
+    // Deletes one product from cart.
+    public async Task<IActionResult> Remove([FromBody] CartRemoveRequest request)
+    {
+        var userId = this.GetAuthenticatedUserId();
+        if (!userId.HasValue) return Unauthorized();
+        if (!this.IsAdmin() && userId.Value != request.UserId) return Forbid();
+        return Ok(await cartService.RemoveFromCartAsync(request));
+    }
 }
